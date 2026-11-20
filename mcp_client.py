@@ -58,6 +58,10 @@ search_tool = None
 aviation_tools = {}
 
 
+class TavilySearchError(RuntimeError):
+    """Raised when Tavily returns an API-level search error."""
+
+
 def normalize_tool_result(result):
     """Unwrap MCP text results and remove transport-only metadata."""
     if isinstance(result, list):
@@ -69,6 +73,25 @@ def normalize_tool_result(result):
     if isinstance(result, dict):
         if result.get("type") == "text" and "text" in result:
             return normalize_tool_result(result["text"])
+        if isinstance(result.get("results"), list):
+            entries = []
+            if result.get("answer"):
+                entries.append(str(result["answer"]))
+            for index, item in enumerate(result["results"], start=1):
+                if not isinstance(item, dict):
+                    continue
+                title = item.get("title") or "Search result"
+                url = item.get("url")
+                content = item.get("content", "").strip()
+                entry = f"{index}. **{title}**"
+                if url:
+                    entry += f"\n   {url}"
+                if content:
+                    entry += f"\n   {content}"
+                entries.append(entry)
+            return "\n\n".join(entries)
+        if result.get("error"):
+            return json.dumps(result, ensure_ascii=False, indent=2)
         if "content" in result:
             content = normalize_tool_result(result["content"])
             sources = result.get("sources", [])
@@ -110,13 +133,13 @@ async def initialize_mcp():
     search_tool = next(
         tool
         for tool in tools
-        if tool.name == "tavily_research"
+        if tool.name == "tavily_search"
     )
     # aviation tools stored in memory for reusability
     aviation_tools = {
         tool.name : tool
         for tool in tools
-        if tool.name != "tavily_research"
+        if tool.name != "tavily_search"
     }
     
 
@@ -124,10 +147,25 @@ async def tavily_mcp_search(query: str):
     await initialize_mcp()
     result = await search_tool.ainvoke(
         {
-            "input": query
+            "query": query,
+            "max_results": 5,
+            "search_depth": "basic",
+            "topic": "general",
         }
     )
-    return normalize_tool_result(result)
+    normalized = normalize_tool_result(result)
+    try:
+        payload = json.loads(normalized)
+    except json.JSONDecodeError:
+        return normalized
+    if isinstance(payload, dict) and payload.get("error"):
+        detail = payload.get("detail", {})
+        message = detail.get("error") if isinstance(detail, dict) else detail
+        raise TavilySearchError(
+            f"{payload['error']} (HTTP {payload.get('status', 'unknown')}): "
+            f"{message or 'No further details provided.'}"
+        )
+    return normalized
 
 async def aviation_mcp_call(tool_name: str, tool_args: dict = None):
     print("Entering aviation_mcp_call")

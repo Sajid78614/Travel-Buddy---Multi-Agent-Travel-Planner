@@ -35,6 +35,7 @@ from mcp_client import (
     aviation_mcp_call,
     extract_destination,
     forecast_mcp_search,
+    TavilySearchError,
     weather_mcp_search
 )
 
@@ -147,9 +148,16 @@ def flight_agent(state: TravelState):
 # Hotel Agent
 def hotel_agent(state: TravelState):
     query = f"Best hotels for {state['user_query']}"
-    search_results = asyncio.run(
-        tavily_mcp_search(query)
-    )
+    try:
+        search_results = asyncio.run(tavily_mcp_search(query))
+    except TavilySearchError as exc:
+        return {
+            "hotel_results": f"Hotel search unavailable: {exc}",
+            "messages": [
+                AIMessage(content="Hotel search unavailable")
+            ],
+        }
+
     response = llm.invoke([
         SystemMessage(
             content=(
