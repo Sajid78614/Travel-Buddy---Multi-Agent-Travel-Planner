@@ -328,11 +328,12 @@ with st.sidebar:
                               help="Your session ID — keeps travel history across queries")
 
     st.markdown("<div class='sidebar-title'>Powered by</div>", unsafe_allow_html=True)
-    for tech in ["🔗 LangGraph", "🧠 Groq · LLaMA 3.3 70B", "🐘 PostgreSQL", "🔍 Tavily Search", "✈️ AviationStack"]:
+    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    for tech in ["🔗 LangGraph", f"🧠 Groq · {groq_model}", "🐘 PostgreSQL", "🔍 Tavily Search", "✈️ AviationStack"]:
         st.markdown(f"<div class='sidebar-chip'>{tech}</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='sidebar-title'>Agent Pipeline</div>", unsafe_allow_html=True)
-    for step in ["① Flight Agent", "② Hotel Agent", "③ Itinerary Agent", "④ Final Agent"]:
+    for step in ["① Flight Agent", "② Hotel Agent", "③ Weather Agent", "④ Itinerary Agent"]:
         st.markdown(f"<div class='sidebar-chip'>{step}</div>", unsafe_allow_html=True)
 
 # ── Hero ──────────────────────────────────────────────────────────────────────
@@ -405,12 +406,12 @@ if generate:
     else:
         config = {"configurable": {"thread_id": thread_id}}
         collected = {
-    "flight_results": "",
-    "hotel_results": "",
-    "weather_results": "",
-    "itinerary": "",
-    "llm_calls": 0
-}
+            "flight_results": "",
+            "hotel_results": "",
+            "weather_results": "",
+            "itinerary": "",
+            "llm_calls": 0,
+        }
 
         st.markdown("---")
         st.markdown("<div class='sec-head'><span>🤖 Agent Pipeline — Live</span></div>",
@@ -448,17 +449,12 @@ if generate:
                         text = state_update.get("itinerary", "")
                         collected["itinerary"] = text
                         st.markdown(text or "_No itinerary generated._")
-                    elif node_name == "final_agent":
-                        msgs = state_update.get("messages", [])
-                        text = msgs[-1].content if msgs else ""
-                        collected["final_response"] = text
-                        st.markdown(text or "_No final response._")
                     collected["llm_calls"] = state_update.get("llm_calls", collected["llm_calls"])
 
         # Metrics
         st.markdown(f"""
         <div class="metric-row">
-            <div class="metric-box"><div class="metric-val">4</div><div class="metric-lbl">Agents Run</div></div>
+            <div class="metric-box"><div class="metric-val">{len(AGENT_META)}</div><div class="metric-lbl">Agents Run</div></div>
             <div class="metric-box"><div class="metric-val">{collected['llm_calls']}</div><div class="metric-lbl">LLM Calls</div></div>
             <div class="metric-box"><div class="metric-val">✅</div><div class="metric-lbl">Status</div></div>
         </div>
@@ -497,11 +493,6 @@ if generate:
 
 ## 🗓️ Itinerary
 {collected['itinerary'] or 'N/A'}
-
----
-
-## 🧠 Final Travel Plan
-{collected['final_response'] or 'N/A'}
 
 ---
 *LLM Calls: {collected['llm_calls']}*
