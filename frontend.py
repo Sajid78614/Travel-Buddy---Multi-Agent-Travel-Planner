@@ -377,21 +377,34 @@ st.markdown("<div class='input-label'>🗺️ Describe your trip</div>", unsafe_
 
 QUICK = ["7-day Japan under ₹2L", "Paris trip for 5 days", "Dubai weekend trip", "Bali backpacking 10 days"]
 qcols = st.columns(len(QUICK))
-quick_fill = ""
+
+def select_quick_prompt(prompt):
+    st.session_state["user_query"] = prompt
+    st.session_state["quick_search_requested"] = True
+
+
 for qc, label in zip(qcols, QUICK):
     with qc:
-        if st.button(label, key=f"q_{label}"):
-            quick_fill = label
+        st.button(
+            label,
+            key=f"q_{label}",
+            on_click=select_quick_prompt,
+            args=(label,),
+        )
 
 user_query = st.text_area(
     "",
-    value=quick_fill,
     placeholder="e.g. Plan a complete 7-day Japan trip including flights, hotels and sightseeing under ₹2 lakhs",
     height=100,
     label_visibility="collapsed",
+    key="user_query",
 )
 
-generate = st.button("🚀  Generate My Travel Plan", use_container_width=True)
+quick_search_requested = st.session_state.pop("quick_search_requested", False)
+generate = st.button(
+    "🚀  Generate My Travel Plan",
+    use_container_width=True,
+) or quick_search_requested
 
 # ── Agent pipeline ────────────────────────────────────────────────────────────
 AGENT_META = {
