@@ -3,6 +3,7 @@
 # main.py
 
 import os
+import json
 from typing import TypedDict, Annotated
 import operator
 
@@ -65,23 +66,23 @@ You are a travel flight expert.
 User Query:
 {query}
 
-Airport Information:
+Airport reference data (not a route or live schedule):
 {airport_data}
 
-Airline Information:
+Airline reference data (not proof that an airline serves this route):
 {airline_data}
 
-Generate:
+Give concise, truthful guidance:
 
-1. Likely departure airport
-2. Likely arrival airport
-3. Airlines serving this route
-4. Typical flight duration
-5. Estimated airfare range
-6. Peak season pricing warning
-7. Booking advice
-
-Return concise travel guidance.
+1. Use a departure city only if the user explicitly provided one. Otherwise say
+   the departure city is needed; never assume the traveler is departing from
+   the United States or any other country.
+2. Do not claim a route, airline, schedule, duration, or fare is verified by
+   the supplied airport/airline reference data.
+3. Do not invent current prices or flight availability. Label any general
+   advice as an estimate and state that live flight options were not retrieved.
+4. If the origin is missing, provide only destination-specific general advice
+   and ask the user to provide their departure city for route guidance.
 """
 
 # Flight Agent
@@ -146,19 +147,29 @@ def flight_agent(state: TravelState):
 # Hotel Agent
 def hotel_agent(state: TravelState):
     query = f"Best hotels for {state['user_query']}"
-    # hotel_results = tavily_search(query)
-
-    ## now use tavily mcp instead for search
-    hotel_results = asyncio.run(
+    search_results = asyncio.run(
         tavily_mcp_search(query)
     )
+    response = llm.invoke([
+        SystemMessage(
+            content=(
+                "Summarize hotel search results for a travel planner. Use only "
+                "hotel names, areas, amenities, prices, and links present in "
+                "the search results. Do not invent availability or prices. "
+                "Keep it concise: at most 5 options, each with a short reason "
+                "to consider it. Preserve useful source links and clearly say "
+                "when the search results do not contain a requested detail."
+            )
+        ),
+        HumanMessage(content=f"Trip request:\n{state['user_query']}\n\nSearch results:\n{search_results}"),
+    ])
 
     return {
-        "hotel_results": hotel_results,
+        "hotel_results": response.content,
         "messages": [
-            AIMessage(content="Hotel information fetched")
+            AIMessage(content="Hotel search results summarized")
         ],
-        "llm_calls": state.get("llm_calls", 0) + 1
+        "llm_calls": state.get("llm_calls", 0) + 1,
     }
 
 def weather_agent(state: TravelState):
@@ -173,36 +184,89 @@ def weather_agent(state: TravelState):
         forecast_mcp_search(city)
     )
 
-    return {
-        "weather_results": f"""
-        Current Weather:
-        {weather_data}
+    def parse_weather_data(data):
+        try:
+            return json.loads(data)
+        except (json.JSONDecodeError, TypeError):
+            return data
 
-        Forecast:
-        {forecast_data}
-        """,
+    current = parse_weather_data(weather_data)
+    forecast = parse_weather_data(forecast_data)
+    if isinstance(current, dict) and "temperature_c" in current:
+        weather_summary = (
+            f"Current weather in {current.get('city', city)}: "
+            f"{current['temperature_c']}°C, "
+            f"feels like {current.get('feels_like_c', 'unknown')}°C; "
+            f"{current.get('condition', 'conditions unavailable')}. "
+            f"Humidity: {current.get('humidity', 'unknown')}%; "
+            f"wind: {current.get('wind_speed', 'unknown')} m/s."
+        )
+    else:
+        weather_summary = f"Current weather: {current}"
+
+    if isinstance(forecast, dict) and isinstance(forecast.get("forecast"), list):
+        forecast_summary = "\n".join(
+            f"- {item.get('datetime', 'Time unavailable')}: "
+            f"{item.get('temperature', 'Unknown')}°C, "
+            f"{item.get('weather', 'conditions unavailable')}"
+            for item in forecast["forecast"]
+            if isinstance(item, dict)
+        )
+        if not forecast_summary:
+            forecast_summary = "No forecast entries were returned."
+    else:
+        forecast_summary = f"Forecast unavailable: {forecast}"
+
+    return {
+        "weather_results": (
+            f"**{city}**\n\n{weather_summary}\n\n"
+            f"Next forecast entries (3-hour intervals, not a full-trip forecast):\n"
+            f"{forecast_summary}"
+        ),
         "messages": [
             AIMessage(
                 content="Weather information fetched"
             )
-        ]
+        ],
+        "llm_calls": state.get("llm_calls", 0) + 1,
     }
 
 # Itinerary Agent
 def itinerary_agent(state: TravelState):
 
     prompt = f"""
-    Create a travel itinerary.
-    User Query:
+    Create a practical, concise travel plan using the user's request and the
+    agent results below.
+
+    Accuracy requirements:
+    - Do not invent facts, bookings, flight schedules, prices, or live
+      availability. Clearly label estimates and say when information was not
+      retrieved.
+    - Do not infer the traveler's departure city or country. If it is missing,
+      say departure details need confirmation.
+    - Prefer the hotel search results for accommodation suggestions and the
+      weather agent's current/forecast data for weather. Do not replace these
+      with generic or seasonal assumptions.
+    - The weather forecast contains only the next few 3-hour entries; do not
+      present it as a full forecast for the entire trip.
+    - Preserve the user's dates, duration, destination, origin, and budget
+      when provided. Do not silently change them.
+    - Use clear Markdown headings and short, useful bullet points.
+
+    Required sections: Trip overview, Flights, Accommodation, Weather, Day-by-
+    day itinerary, Budget/booking notes. If a section lacks reliable source
+    data, say so plainly instead of guessing.
+
+    User request:
     {state['user_query']}
 
-    Flight Results:
+    Flight agent results:
     {state['flight_results']}
 
-    Hotel Results:
+    Hotel search results:
     {state['hotel_results']}
     
-    Weather Information:
+    Weather results:
     {state['weather_results']}
     """
 

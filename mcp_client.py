@@ -1,5 +1,6 @@
 import os
 import asyncio
+import json
 import sys
 
 from dotenv import load_dotenv
@@ -56,6 +57,45 @@ client = MultiServerMCPClient(
 search_tool = None
 aviation_tools = {}
 
+
+def normalize_tool_result(result):
+    """Unwrap MCP text results and remove transport-only metadata."""
+    if isinstance(result, list):
+        return "\n\n".join(
+            text for item in result
+            if (text := normalize_tool_result(item))
+        )
+
+    if isinstance(result, dict):
+        if result.get("type") == "text" and "text" in result:
+            return normalize_tool_result(result["text"])
+        if "content" in result:
+            content = normalize_tool_result(result["content"])
+            sources = result.get("sources", [])
+            if isinstance(sources, list):
+                source_links = [
+                    f"- [{source.get('title') or source['url']}]({source['url']})"
+                    for source in sources
+                    if isinstance(source, dict) and source.get("url")
+                ]
+                if source_links:
+                    content = f"{content}\n\n**Sources**\n" + "\n".join(source_links)
+            return content
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+    if isinstance(result, str):
+        text = result.strip()
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError:
+            return text
+        if isinstance(decoded, (dict, list)):
+            return normalize_tool_result(decoded)
+        return text
+
+    return str(result)
+
+
 # # Globally storing tavily_search mcp tools & aviation tools for reusability 
 async def initialize_mcp():
     global search_tool
@@ -87,7 +127,7 @@ async def tavily_mcp_search(query: str):
             "input": query
         }
     )
-    return result
+    return normalize_tool_result(result)
 
 async def aviation_mcp_call(tool_name: str, tool_args: dict = None):
     print("Entering aviation_mcp_call")
@@ -97,7 +137,7 @@ async def aviation_mcp_call(tool_name: str, tool_args: dict = None):
         if t.name == tool_name
     )
     result = await tool.ainvoke(tool_args or {})
-    return result
+    return normalize_tool_result(result)
 
 async def get_airports():
     await initialize_mcp()
@@ -105,7 +145,7 @@ async def get_airports():
     if not tool:
         return "Airport tool unavailable"
     result = await tool.ainvoke({})
-    return result
+    return normalize_tool_result(result)
 
 
 async def get_airlines():
@@ -114,7 +154,7 @@ async def get_airlines():
     if not tool:
         return "Airline tool unavailable"
     result = await tool.ainvoke({})
-    return result
+    return normalize_tool_result(result)
 
 # configure custom weather MCP tools 
 weather_tool = None
@@ -145,22 +185,24 @@ async def weather_mcp_search(city: str):
 
     await initialize_weather_tools()
 
-    return await weather_tool.ainvoke(
+    result = await weather_tool.ainvoke(
         {
             "city": city
         }
     )
+    return normalize_tool_result(result)
 
 
 async def forecast_mcp_search(city: str):
 
     await initialize_weather_tools()
 
-    return await forecast_tool.ainvoke(
+    result = await forecast_tool.ainvoke(
         {
             "city": city
         }
     )
+    return normalize_tool_result(result)
 
 # async def main():
 #     tools = await client.get_tools()
