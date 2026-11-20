@@ -1,7 +1,26 @@
-import os
-import streamlit as st
 from datetime import datetime
+import os
+
 from langchain_core.messages import HumanMessage
+import streamlit as st
+from streamlit.errors import StreamlitSecretNotFoundError
+
+try:
+    secrets = st.secrets
+except StreamlitSecretNotFoundError:
+    secrets = {}
+
+for name in (
+    "GROQ_API_KEY",
+    "GROQ_MODEL",
+    "TAVILY_API_KEY",
+    "AVIATION_STACK_API_KEY",
+    "OPENWEATHER_API_KEY",
+    "DATABASE_URL",
+):
+    if name in secrets:
+        os.environ[name] = str(secrets[name])
+
 from main import app
 
 st.set_page_config(
