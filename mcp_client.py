@@ -11,21 +11,19 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 AVIATION_STACK_API_KEY = os.getenv("AVIATION_STACK_API_KEY")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
+
 client = MultiServerMCPClient(
     {
-        # Remote MCP Server (Tavily)
+        # Remote Tavily MCP Server
         "tavily": {
-            "transport": "streamable_http", # transporation mechanism for remote connection
+            "transport": "streamable_http",
             "url": f"https://mcp.tavily.com/mcp/?tavilyApiKey={TAVILY_API_KEY}",
         },
 
         # Local AviationStack MCP Server
         "aviationstack": {
-            "transport": "stdio", # transport mech for local connection
-            "command": (
-                r"C:\Users\Win11\Desktop\WEB\MULTI-AGENT-TRAVEL-PLANNER"
-                r"\TripGraph-Travel-Planner\aviation_mcp\.venv\Scripts\python.exe"
-            ),
+            "transport": "stdio",
+            "command": sys.executable,
             "args": [
                 "-m",
                 "aviationstack_mcp",
@@ -36,9 +34,11 @@ client = MultiServerMCPClient(
                 "AVIATION_STACK_API_KEY": AVIATION_STACK_API_KEY,
             },
         },
+
+        # Local Weather MCP Server
         "weather": {
             "transport": "stdio",
-            "command": sys.executable,   # Uses the current project's Python
+            "command": sys.executable,
             "args": [
                 os.path.join(
                     os.path.dirname(__file__),
@@ -46,11 +46,12 @@ client = MultiServerMCPClient(
                 )
             ],
             "env": {
-                "OPENWEATHER_API_KEY": OPENWEATHER_API_KEY
-            }
-        }
+                "OPENWEATHER_API_KEY": OPENWEATHER_API_KEY,
+            },
+        },
     }
 )
+
 
 search_tool = None
 aviation_tools = {}
@@ -69,13 +70,13 @@ async def initialize_mcp():
     search_tool = next(
         tool
         for tool in tools
-        if tool.name == "tavily_search"
+        if tool.name == "tavily_research"
     )
     # aviation tools stored in memory for reusability
     aviation_tools = {
         tool.name : tool
         for tool in tools
-        if tool.name != "tavily_search"
+        if tool.name != "tavily_research"
     }
     
 
@@ -83,7 +84,7 @@ async def tavily_mcp_search(query: str):
     await initialize_mcp()
     result = await search_tool.ainvoke(
         {
-            "query": query
+            "input": query
         }
     )
     return result
@@ -191,7 +192,7 @@ from langchain_groq import ChatGroq
 
 # LLM
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile"
+    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 )
 
 ###################################

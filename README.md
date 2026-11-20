@@ -273,6 +273,7 @@ Create a `.env` file.
 
 ```text
 GROQ_API_KEY=
+GROQ_MODEL=openai/gpt-oss-120b
 
 TAVILY_API_KEY=
 
@@ -282,6 +283,9 @@ OPENWEATHER_API_KEY=
 
 DATABASE_URL=
 ```
+
+`GROQ_MODEL` is optional; it defaults to `openai/gpt-oss-120b`. Set it to a
+chat model available to your Groq account if you want to use a different model.
 
 ---
 

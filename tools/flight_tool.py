@@ -18,7 +18,7 @@ def search_flights(query):
     response = requests.get(url, params=params)
 
     data = response.json()
-
+    print(data)
     flights = []
 
     if "data" in data:
