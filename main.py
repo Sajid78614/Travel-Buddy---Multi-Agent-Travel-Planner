@@ -7,7 +7,7 @@ import json
 from typing import TypedDict, Annotated
 import operator
 
-import psycopg
+from psycopg_pool import ConnectionPool
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.postgres import PostgresSaver
 from langchain_core.messages import (
@@ -307,12 +307,19 @@ graph.add_edge("weather_agent", "itinerary_agent")
 graph.add_edge("itinerary_agent", END)
 
 
-# Persistent connection so both CLI and Streamlit can share the compiled app
-_conn = psycopg.connect(DATABASE_URL)
-_conn.autocommit = True
+# Pool connections so both CLI and Streamlit can recover from stale database
+# connections and handle concurrent requests.
+_pool = ConnectionPool(
+    conninfo=DATABASE_URL,
+    min_size=1,
+    max_size=5,
+    kwargs={"autocommit": True, "prepare_threshold": 0},
+    check=ConnectionPool.check_connection,
+    max_lifetime=1800,
+)
 
 # Persist graph state so conversations can resume across requests
-checkpointer = PostgresSaver(_conn)
+checkpointer = PostgresSaver(_pool)
 checkpointer.setup()
 
 # Compile the workflow into an executable application with persistent memory

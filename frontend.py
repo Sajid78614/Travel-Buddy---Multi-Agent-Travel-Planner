@@ -5,6 +5,12 @@ from langchain_core.messages import HumanMessage
 import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 
+st.set_page_config(
+    page_title="AI Travel Booking System",
+    page_icon="✈️",
+    layout="wide"
+)
+
 try:
     secrets = st.secrets
 except StreamlitSecretNotFoundError:
@@ -25,12 +31,6 @@ for name in (
         pass
 
 from main import app
-
-st.set_page_config(
-    page_title="AI Travel Booking System",
-    page_icon="✈️",
-    layout="wide"
-)
 
 st.markdown("""
 <style>
@@ -318,6 +318,54 @@ div[data-testid="stDownloadButton"] > button {
     color: #e8f4ff !important;
     border: 1px solid #2a5080 !important;
     border-radius: 10px !important;
+}
+
+@media (max-width: 640px) {
+    .block-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .hero-wrapper {
+        height: 250px;
+        border-radius: 14px;
+        margin-bottom: 1.25rem;
+    }
+
+    .hero-content {
+        padding: 1rem;
+    }
+
+    .hero-title {
+        font-size: clamp(1.5rem, 7vw, 2rem);
+    }
+
+    .hero-sub {
+        font-size: 0.9rem;
+    }
+
+    .metric-row {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .metric-box {
+        padding: 0.75rem 0.5rem;
+    }
+
+    .metric-val {
+        font-size: clamp(1.2rem, 6vw, 1.6rem);
+    }
+
+    div[data-testid="stButton"] > button {
+        padding: 0.7rem 0.75rem !important;
+        font-size: 0.95rem !important;
+    }
+
+    .final-card {
+        padding: 1rem;
+        overflow-wrap: anywhere;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
