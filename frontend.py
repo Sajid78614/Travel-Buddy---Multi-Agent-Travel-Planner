@@ -18,8 +18,11 @@ for name in (
     "OPENWEATHER_API_KEY",
     "DATABASE_URL",
 ):
-    if name in secrets:
-        os.environ[name] = str(secrets[name])
+    try:
+        if name in secrets:
+            os.environ[name] = str(secrets[name])
+    except StreamlitSecretNotFoundError:
+        pass
 
 from main import app
 
@@ -324,8 +327,16 @@ with st.sidebar:
     st.markdown("<div class='sidebar-title'>🌍 AI Travel Planner</div>", unsafe_allow_html=True)
     st.markdown("---")
 
-    thread_id = st.text_input("👤 User ID", value="rishu_user",
-                              help="Your session ID — keeps travel history across queries")
+    if "thread_id" not in st.session_state:
+        st.session_state["thread_id"] = "sajid_123"
+    elif st.session_state["thread_id"] in ("rishu_user", "rishu", "uesrid"):
+        st.session_state["thread_id"] = "sajid_123"
+
+    thread_id = st.text_input(
+        "👤 User ID",
+        key="thread_id",
+        help="Your session ID — keeps travel history across queries",
+    )
 
     st.markdown("<div class='sidebar-title'>Powered by</div>", unsafe_allow_html=True)
     groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
